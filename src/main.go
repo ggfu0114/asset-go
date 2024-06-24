@@ -1,19 +1,31 @@
 package main
 
 import (
-	"io"
 	"log"
-	"net/http"
+
+	"github.com/gin-gonic/gin"
 )
+
+type Name struct {
+	FirstName  string `json:"first_name" binding:"required"`
+	SecondName string `json:"second_name" binding:"required"`
+}
 
 func main() {
 	// Hello world, the web server
 
-	helloHandler := func(w http.ResponseWriter, req *http.Request) {
-		io.WriteString(w, "Hello, world!\n")
-	}
+	r := gin.Default()
+	r.GET("/ping", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"message": "pong",
+		})
+	})
+	r.POST("/input", func(c *gin.Context) {
+		var name Name
+		c.BindJSON(&name)
+		log.Println("Recv one request", name)
+		c.JSON(200, gin.H{"first": name.FirstName, "second": name.SecondName})
+	})
+	r.Run()
 
-	http.HandleFunc("/hello", helloHandler)
-    log.Println("Listing for requests at http://localhost:8000/hello")
-	log.Fatal(http.ListenAndServe(":8001", nil))
 }
