@@ -2,8 +2,9 @@ package main
 
 import (
 	"log"
-
 	"github.com/gin-gonic/gin"
+	"asset-go/src/models"
+	_ "github.com/go-sql-driver/mysql"
 )
 
 type Name struct {
@@ -16,9 +17,17 @@ func main() {
 
 	r := gin.Default()
 	r.GET("/ping", func(c *gin.Context) {
+		db := models.GetDb()
+		err := db.Ping()
+		if err != nil{
+			log.Println("Failed to connect DB", err)
+		}
+		log.Println("DB is connected")
+	
 		c.JSON(200, gin.H{
 			"message": "pong",
 		})
+
 	})
 	r.POST("/input", func(c *gin.Context) {
 		var name Name
