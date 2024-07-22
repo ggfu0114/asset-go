@@ -18,3 +18,7 @@ $ gin run main.go
 ```sh
 $docker exec -it dev-mysql mysql -uroot -p
 ```
+2. Command to initiate MySQL database schema by a pre-define script.
+```sh
+$ docker exec -i dev-mysql sh -c 'exec mysql -uroot -p"dev"' < /Users/paul/Study/asset-go/mysql-init.sql
+```

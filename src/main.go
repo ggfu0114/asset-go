@@ -17,15 +17,17 @@ func main() {
 
 	r := gin.Default()
 	r.GET("/ping", func(c *gin.Context) {
-		db := models.GetDb()
-		err := db.Ping()
-		if err != nil{
-			log.Println("Failed to connect DB", err)
-		}
-		log.Println("DB is connected")
-	
 		c.JSON(200, gin.H{
 			"message": "pong",
+		})
+
+	})
+	r.GET("/assets", func(c *gin.Context) {
+		assets := dbmodel.ListMyAsset()
+		log.Println("assets", assets)
+		
+		c.JSON(200, gin.H{
+			"assets": assets,
 		})
 
 	})
