@@ -7,21 +7,13 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-type Name struct {
-	FirstName  string `json:"first_name" binding:"required"`
-	SecondName string `json:"second_name" binding:"required"`
-}
+
 
 func main() {
 	// Hello world, the web server
 
 	r := gin.Default()
-	r.GET("/ping", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"message": "pong",
-		})
-
-	})
+	
 	r.GET("/assets", func(c *gin.Context) {
 		assets := dbmodel.ListMyAsset()
 		log.Println("assets", assets)
@@ -31,12 +23,36 @@ func main() {
 		})
 
 	})
-	r.POST("/input", func(c *gin.Context) {
-		var name Name
-		c.BindJSON(&name)
-		log.Println("Recv one request", name)
-		c.JSON(200, gin.H{"first": name.FirstName, "second": name.SecondName})
+	r.POST("/asset", func(c *gin.Context) {
+		reqAsset := new(dbmodel.Asset)
+		err := c.Bind(reqAsset)
+		if err != nil{
+			log.Fatalln("Failed to bind request payload.", err)
+		}
+		aid := dbmodel.AddAsset(*reqAsset)
+		c.JSON(200, gin.H{
+			"aid": aid,
+		})
 	})
+	r.PUT("/asset/:aid", func(c *gin.Context) {
+		aid := c.Param("aid")
+		reqAsset := new(dbmodel.Asset)
+		err := c.Bind(reqAsset)
+		if err != nil{
+			log.Fatalln("Failed to bind request payload.", err)
+		}
+		dbmodel.UpdateAsset(aid, *reqAsset)
+		c.JSON(200, gin.H{
+			"reqAsset": reqAsset,
+		})
+	})
+	r.DELETE("/asset/:aid", func(c *gin.Context) {
+		aid := c.Param("aid")
+		dbmodel.DeleteAsset(aid)
+		c.JSON(200, gin.H{
+			"deletedAsset": aid,
+		})
+	})
+	
 	r.Run()
-
 }
