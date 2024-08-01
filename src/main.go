@@ -3,35 +3,94 @@ package main
 import (
 	dbmodel "asset-go/src/models"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/golang-jwt/jwt/v4"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
 
+type UserInfo struct {
+	// Gender: The user's gender.
+	Gender string `json:"gender,omitempty"`
+	// GivenName: The user's first name.
+	GivenName string `json:"given_name,omitempty"`
+	// Id: The obfuscated ID of the user.
+	Id string `json:"id,omitempty"`
+	// Name: The user's full name.
+	Name string `json:"name,omitempty"`
+	// Picture: URL of the user's picture image.
+	Picture string `json:"picture,omitempty"`
+	// VerifiedEmail: Boolean flag which is true if the email address is verified.
+	// Always verified because we only return the user's primary email address.
+	//
+	// Default: true
+	VerifiedEmail *bool `json:"verified_email,omitempty"`
+}
+
+type UserClaim struct {
+	jwt.RegisteredClaims
+	Id   string `json:"id"`
+	Name string `json:"name"`
+}
+
+const key = "<key>"
+
 var conf = &oauth2.Config{
-	ClientID:     "<ClientID>",
-	ClientSecret: "<ClientSecret>",
+	ClientID:     "<client-id>",
+	ClientSecret: "<client-security>",
 	RedirectURL:  "http://127.0.0.1:3000/oauth_callback",
 	Scopes:       []string{"profile", "email"},
 	Endpoint:     google.Endpoint,
 }
 
+func ParseToken(jwtToken string) (*UserClaim, error) {
+	var userClaim UserClaim
+	token, err := jwt.ParseWithClaims(jwtToken, &userClaim, func(token *jwt.Token) (interface{}, error) {
+		return []byte(key), nil
+	})
+
+	if err != nil {
+		log.Fatal(err)
+		return nil, err
+	}
+
+	// Checking token validity
+	if !token.Valid {
+		log.Fatal("invalid token")
+		return nil, err
+	}
+	return &userClaim, nil
+}
+
 func CheckToken(c *gin.Context) {
 	session := sessions.Default(c)
 	token := session.Get("token")
+	url := conf.AuthCodeURL("state")
 	if token == nil {
 		log.Println("Session token is empty.")
-		url := conf.AuthCodeURL("state")
+
 		c.Redirect(http.StatusFound, url)
+	} else {
+		log.Println("token from session", token.(string))
+		claims, err := ParseToken(token.(string))
+		if err != nil {
+			log.Println("errerrerr", err)
+			c.Redirect(http.StatusFound, url)
+		} else {
+			log.Println("claims", claims)
+		}
 	}
-	log.Println("Session ID:", token)
 }
 
 func main() {
@@ -54,9 +113,42 @@ func main() {
 			return
 		}
 		log.Println("Google Oauth token", token)
+		client := conf.Client(context.Background(), token)
+		resp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
+		if err != nil {
+			c.AbortWithError(http.StatusBadRequest, err)
+			return
+		}
 
+		data, err := io.ReadAll(resp.Body)
+		if err != nil {
+			c.AbortWithError(http.StatusInternalServerError, err)
+		}
+		var result UserInfo
+		if err := json.Unmarshal(data, &result); err != nil {
+			c.AbortWithError(http.StatusInternalServerError, err)
+		}
+
+		log.Println("result", result)
+
+		defer resp.Body.Close()
+
+		token1 := jwt.NewWithClaims(jwt.SigningMethodHS256,
+			UserClaim{
+				RegisteredClaims: jwt.RegisteredClaims{
+					Issuer:    "PaulChen",
+					ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+				},
+				Id:   result.Id,
+				Name: result.Name,
+			})
+		jwtToken, err := token1.SignedString([]byte(key))
+		log.Println("generated session", jwtToken)
+		if err != nil {
+			fmt.Errorf("error creating signed string: %v", err)
+		}
 		session := sessions.Default(c)
-		session.Set("token", "pass")
+		session.Set("token", jwtToken)
 		session.Save()
 		c.Redirect(http.StatusFound, "/assets")
 	})

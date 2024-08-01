@@ -13,6 +13,10 @@ $ cd src
 $ gin run main.go
 ```
 
+> The backend platform service
+
+[GCP Asset](https://console.cloud.google.com/home/dashboard?hl=en&project=asset-430906)
+
 > Debug commands
 1. If there is a requirement to access into container DB to investage data. Run the command to enter mysql interactive mode. Enter MySQL root password as terminal prompt a question.
 ```sh
