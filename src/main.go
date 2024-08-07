@@ -1,14 +1,15 @@
 package main
 
 import (
+	api "asset-go/src/api"
 	dbmodel "asset-go/src/models"
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-contrib/sessions"
@@ -19,24 +20,6 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
-
-type UserInfo struct {
-	// Gender: The user's gender.
-	Gender string `json:"gender,omitempty"`
-	// GivenName: The user's first name.
-	GivenName string `json:"given_name,omitempty"`
-	// Id: The obfuscated ID of the user.
-	Id string `json:"id,omitempty"`
-	// Name: The user's full name.
-	Name string `json:"name,omitempty"`
-	// Picture: URL of the user's picture image.
-	Picture string `json:"picture,omitempty"`
-	// VerifiedEmail: Boolean flag which is true if the email address is verified.
-	// Always verified because we only return the user's primary email address.
-	//
-	// Default: true
-	VerifiedEmail *bool `json:"verified_email,omitempty"`
-}
 
 type UserClaim struct {
 	jwt.RegisteredClaims
@@ -124,12 +107,15 @@ func main() {
 		if err != nil {
 			c.AbortWithError(http.StatusInternalServerError, err)
 		}
-		var result UserInfo
+		var result api.UserInfo
 		if err := json.Unmarshal(data, &result); err != nil {
 			c.AbortWithError(http.StatusInternalServerError, err)
 		}
 
 		log.Println("result", result)
+		user, err := dbmodel.InsertUser(result)
+		log.Println("user", user)
+		log.Println("err", err)
 
 		defer resp.Body.Close()
 
@@ -139,17 +125,19 @@ func main() {
 					Issuer:    "PaulChen",
 					ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
 				},
-				Id:   result.Id,
-				Name: result.Name,
+				Id:   strconv.FormatInt(user.Uid, 10),
+				Name: user.Name,
 			})
 		jwtToken, err := token1.SignedString([]byte(key))
+
 		log.Println("generated session", jwtToken)
 		if err != nil {
-			fmt.Errorf("error creating signed string: %v", err)
+			c.AbortWithError(http.StatusInternalServerError, err)
 		}
 		session := sessions.Default(c)
 		session.Set("token", jwtToken)
 		session.Save()
+
 		c.Redirect(http.StatusFound, "/assets")
 	})
 	r.Use(CheckToken)
