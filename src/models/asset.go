@@ -7,6 +7,7 @@ import (
 
 type Asset struct {
 	Aid          int
+	Uid          int
 	AssetType    string
 	AssetSubType string
 	Code         string
@@ -15,17 +16,19 @@ type Asset struct {
 	Market       string
 }
 
-func ListMyAsset() []Asset {
+func ListMyAsset(Uid string) []Asset {
 	var assets []Asset
 	db := GetDb()
-	rows, err := db.Query("SELECT * FROM myasset")
+	rows, err := db.Query("SELECT * FROM myasset WHERE Uid=?", Uid)
 	if err != nil {
 		log.Println("Failed to query DB", err)
 	}
+	defer rows.Close()
+
 	for rows.Next() {
 		var asset Asset
 		err := rows.Scan(
-			&asset.Aid, &asset.AssetType, &asset.AssetSubType, &asset.Code, &asset.Amount, &asset.Label, &asset.Market)
+			&asset.Aid, &asset.AssetType, &asset.AssetSubType, &asset.Code, &asset.Amount, &asset.Label, &asset.Market, &asset.Uid)
 		if err != nil {
 			log.Fatalln(err)
 		} else {
@@ -34,15 +37,15 @@ func ListMyAsset() []Asset {
 	}
 	return assets
 }
-func AddAsset(asset Asset) string {
+func AddAsset(Uid string, asset Asset) string {
 	db := GetDb()
-	stmt, err := db.Prepare("INSERT INTO myasset SET AssetType=?, AssetSubType=?, Code=?, Amount=?, Label=?, Market=?")
+	stmt, err := db.Prepare("INSERT INTO myasset SET AssetType=?, AssetSubType=?, Code=?, Amount=?, Label=?, Market=?, Uid=?")
 	if err != nil {
 		return ""
 	}
 
 	res, queryError := stmt.Exec(asset.AssetType,
-		asset.AssetSubType, asset.Code, asset.Amount, asset.Label, asset.Market)
+		asset.AssetSubType, asset.Code, asset.Amount, asset.Label, asset.Market, Uid)
 	id, err := res.LastInsertId()
 	var aid string
 	if err != nil {
@@ -58,14 +61,14 @@ func AddAsset(asset Asset) string {
 	return aid
 }
 
-func UpdateAsset(aid string, asset Asset) int {
+func UpdateAsset(uid string, aid string, asset Asset) int {
 	db := GetDb()
-	stmt, err := db.Prepare("UPDATE myasset SET AssetType=?, AssetSubType=?, Code=?, Amount=?, Label=?, Market=? WHERE Aid=?")
+	stmt, err := db.Prepare("UPDATE myasset SET AssetType=?, AssetSubType=?, Code=?, Amount=?, Label=?, Market=? WHERE Aid=? AND Uid=?")
 	if err != nil {
 		return -1
 	}
 	res, queryError := stmt.Exec(asset.AssetType,
-		asset.AssetSubType, asset.Code, asset.Amount, asset.Label, asset.Market, aid)
+		asset.AssetSubType, asset.Code, asset.Amount, asset.Label, asset.Market, aid, uid)
 	log.Println("res", res)
 	if queryError != nil {
 		log.Fatalln(queryError)
@@ -73,9 +76,9 @@ func UpdateAsset(aid string, asset Asset) int {
 	}
 	return 1
 }
-func DeleteAsset(aid string) bool {
+func DeleteAsset(uid string, aid string) bool {
 	db := GetDb()
-	_, err = db.Exec("DELETE FROM `myasset` WHERE `aid` = ?;", aid)
+	_, err = db.Exec("DELETE FROM `myasset` WHERE `aid` = ? AND `uid`=?;", aid, uid)
 	if err != nil {
 		log.Fatalln(err)
 		return false

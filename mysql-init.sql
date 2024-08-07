@@ -2,6 +2,7 @@ USE go-test;
 
 CREATE TABLE `myasset` (
     `Aid` INT(10) NOT NULL AUTO_INCREMENT,
+    `Uid` INT(10) NOT NULL,
     `AssetType` VARCHAR(64) NULL DEFAULT NULL,
     `AssetSubType` VARCHAR(64) NULL DEFAULT NULL,
     `Code` VARCHAR(64) NULL DEFAULT NULL,

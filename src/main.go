@@ -44,35 +44,50 @@ func ParseToken(jwtToken string) (*UserClaim, error) {
 	})
 
 	if err != nil {
-		log.Fatal(err)
+		log.Println("Failed to parse token, ", err)
 		return nil, err
 	}
 
 	// Checking token validity
 	if !token.Valid {
-		log.Fatal("invalid token")
+		log.Println("invalid token")
 		return nil, err
 	}
 	return &userClaim, nil
 }
 
-func CheckToken(c *gin.Context) {
+func CheckToken(c *gin.Context) (*UserClaim, error) {
 	session := sessions.Default(c)
 	token := session.Get("token")
 	url := conf.AuthCodeURL("state")
+	var claims *UserClaim
+	var err error
 	if token == nil {
 		log.Println("Session token is empty.")
 
 		c.Redirect(http.StatusFound, url)
 	} else {
 		log.Println("token from session", token.(string))
-		claims, err := ParseToken(token.(string))
+		claims, err = ParseToken(token.(string))
+		log.Println("claims, err", claims, err)
 		if err != nil {
 			log.Println("errerrerr", err)
 			c.Redirect(http.StatusFound, url)
-		} else {
-			log.Println("claims", claims)
 		}
+	}
+	return claims, err
+}
+
+func getUserFromContextMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userClaim, err := CheckToken(c)
+		if err != nil {
+			// Handle error, e.g., return unauthorized
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			return
+		}
+		c.Set("userInfo", userClaim)
+		c.Next()
 	}
 }
 
@@ -125,7 +140,7 @@ func main() {
 					Issuer:    "PaulChen",
 					ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
 				},
-				Id:   strconv.FormatInt(user.Uid, 10),
+				Id:   strconv.Itoa(user.Uid),
 				Name: user.Name,
 			})
 		jwtToken, err := token1.SignedString([]byte(key))
@@ -140,9 +155,14 @@ func main() {
 
 		c.Redirect(http.StatusFound, "/assets")
 	})
-	r.Use(CheckToken)
+	r.Use(getUserFromContextMiddleware())
 	r.GET("/assets", func(c *gin.Context) {
-		assets := dbmodel.ListMyAsset()
+		user, userInfoErr := c.MustGet("userInfo").(*UserClaim)
+		if !userInfoErr {
+			c.AbortWithError(http.StatusInternalServerError, gin.Error{})
+		}
+
+		assets := dbmodel.ListMyAsset(user.Id)
 		log.Println("assets", assets)
 
 		c.JSON(200, gin.H{
@@ -151,31 +171,44 @@ func main() {
 
 	})
 	r.POST("/asset", func(c *gin.Context) {
+		user, userInfoErr := c.MustGet("userInfo").(*UserClaim)
+		if !userInfoErr {
+			c.AbortWithError(http.StatusInternalServerError, gin.Error{})
+		}
 		reqAsset := new(dbmodel.Asset)
 		err := c.Bind(reqAsset)
 		if err != nil {
 			log.Fatalln("Failed to bind request payload.", err)
 		}
-		aid := dbmodel.AddAsset(*reqAsset)
+		aid := dbmodel.AddAsset(user.Id, *reqAsset)
 		c.JSON(200, gin.H{
 			"aid": aid,
 		})
 	})
 	r.PUT("/asset/:aid", func(c *gin.Context) {
+
+		user, userInfoErr := c.MustGet("userInfo").(*UserClaim)
+		if !userInfoErr {
+			c.AbortWithError(http.StatusInternalServerError, gin.Error{})
+		}
 		aid := c.Param("aid")
 		reqAsset := new(dbmodel.Asset)
 		err := c.Bind(reqAsset)
 		if err != nil {
 			log.Fatalln("Failed to bind request payload.", err)
 		}
-		dbmodel.UpdateAsset(aid, *reqAsset)
+		dbmodel.UpdateAsset(user.Id, aid, *reqAsset)
 		c.JSON(200, gin.H{
 			"reqAsset": reqAsset,
 		})
 	})
 	r.DELETE("/asset/:aid", func(c *gin.Context) {
+		user, userInfoErr := c.MustGet("userInfo").(*UserClaim)
+		if !userInfoErr {
+			c.AbortWithError(http.StatusInternalServerError, gin.Error{})
+		}
 		aid := c.Param("aid")
-		dbmodel.DeleteAsset(aid)
+		dbmodel.DeleteAsset(user.Id, aid)
 		c.JSON(200, gin.H{
 			"deletedAsset": aid,
 		})
