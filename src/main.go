@@ -1,7 +1,7 @@
 package main
 
 import (
-	api "asset-go/src/api"
+	"asset-go/src/api"
 	dbmodel "asset-go/src/models"
 	"context"
 	"encoding/json"
@@ -59,20 +59,18 @@ func ParseToken(jwtToken string) (*UserClaim, error) {
 func CheckToken(c *gin.Context) (*UserClaim, error) {
 	session := sessions.Default(c)
 	token := session.Get("token")
-	url := conf.AuthCodeURL("state")
 	var claims *UserClaim
 	var err error
 	if token == nil {
-		log.Println("Session token is empty.")
+		err = errors.New("token is empty")
+		c.AbortWithStatus(http.StatusUnauthorized)
 
-		c.Redirect(http.StatusFound, url)
 	} else {
 		log.Println("token from session", token.(string))
 		claims, err = ParseToken(token.(string))
-		log.Println("claims, err", claims, err)
 		if err != nil {
-			log.Println("errerrerr", err)
-			c.Redirect(http.StatusFound, url)
+			err = errors.New("failed to parse token")
+			c.AbortWithStatus(http.StatusUnauthorized)
 		}
 	}
 	return claims, err
@@ -80,8 +78,10 @@ func CheckToken(c *gin.Context) (*UserClaim, error) {
 
 func getUserFromContextMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		log.Println("Try to get user information by Middleware!")
 		userClaim, err := CheckToken(c)
 		if err != nil {
+			log.Println("claims, err", userClaim, err)
 			// Handle error, e.g., return unauthorized
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 			return
@@ -94,10 +94,19 @@ func getUserFromContextMiddleware() gin.HandlerFunc {
 func main() {
 
 	r := gin.Default()
+	apiV1 := r.Group("/api/v1")
+	apiAuth := r.Group("/api/auth")
 	store := cookie.NewStore([]byte("secret"))
-	r.Use(sessions.Sessions("mysession", store))
+	apiAuth.Use(sessions.Sessions("asset_sess", store))
+	apiV1.Use(sessions.Sessions("asset_sess", store))
 
-	r.GET("/oauth_callback", func(c *gin.Context) {
+	apiAuth.GET("/oauth_login", func(c *gin.Context) {
+
+		url := conf.AuthCodeURL("state")
+		c.Redirect(http.StatusFound, url)
+	})
+
+	apiAuth.GET("/oauth_callback", func(c *gin.Context) {
 		state := c.Query("state")
 		if state != "state" {
 			c.AbortWithError(http.StatusUnauthorized, errors.New("invalid csrf token"))
@@ -153,10 +162,11 @@ func main() {
 		session.Set("token", jwtToken)
 		session.Save()
 
-		c.Redirect(http.StatusFound, "/assets")
+		c.Redirect(http.StatusFound, "/")
 	})
-	r.Use(getUserFromContextMiddleware())
-	r.GET("/assets", func(c *gin.Context) {
+	apiV1.Use(getUserFromContextMiddleware())
+
+	apiV1.GET("/assets", func(c *gin.Context) {
 		user, userInfoErr := c.MustGet("userInfo").(*UserClaim)
 		if !userInfoErr {
 			c.AbortWithError(http.StatusInternalServerError, gin.Error{})
@@ -170,7 +180,7 @@ func main() {
 		})
 
 	})
-	r.POST("/asset", func(c *gin.Context) {
+	apiV1.POST("/asset", func(c *gin.Context) {
 		user, userInfoErr := c.MustGet("userInfo").(*UserClaim)
 		if !userInfoErr {
 			c.AbortWithError(http.StatusInternalServerError, gin.Error{})
@@ -185,7 +195,7 @@ func main() {
 			"aid": aid,
 		})
 	})
-	r.PUT("/asset/:aid", func(c *gin.Context) {
+	apiV1.PUT("/asset/:aid", func(c *gin.Context) {
 
 		user, userInfoErr := c.MustGet("userInfo").(*UserClaim)
 		if !userInfoErr {
@@ -202,7 +212,7 @@ func main() {
 			"reqAsset": reqAsset,
 		})
 	})
-	r.DELETE("/asset/:aid", func(c *gin.Context) {
+	apiV1.DELETE("/asset/:aid", func(c *gin.Context) {
 		user, userInfoErr := c.MustGet("userInfo").(*UserClaim)
 		if !userInfoErr {
 			c.AbortWithError(http.StatusInternalServerError, gin.Error{})

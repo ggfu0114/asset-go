@@ -10,7 +10,7 @@ $ docker run \
 ```
 ```sh
 $ cd src
-$ gin run main.go
+$ gin --appPort 4000 --all -i run main.ts
 ```
 
 > The backend platform service
