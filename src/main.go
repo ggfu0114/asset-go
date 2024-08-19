@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
@@ -91,8 +92,24 @@ func getUserFromContextMiddleware() gin.HandlerFunc {
 	}
 }
 
-func main() {
+func getRequestUserInfo(c *gin.Context) (*UserClaim, bool) {
+	env := os.Getenv("APP_ENV")
+	if env == "dev" {
+		user := UserClaim{
+			Id:   "0",
+			Name: "Sys dev",
+		}
+		return &user, true
+	}
+	user, err := c.MustGet("userInfo").(*UserClaim)
+	if !err {
+		c.AbortWithError(http.StatusInternalServerError, gin.Error{})
+	}
+	return user, err
+}
 
+func main() {
+	env := os.Getenv("APP_ENV")
 	r := gin.Default()
 	apiV1 := r.Group("/api/v1")
 	apiAuth := r.Group("/api/auth")
@@ -135,11 +152,7 @@ func main() {
 		if err := json.Unmarshal(data, &result); err != nil {
 			c.AbortWithError(http.StatusInternalServerError, err)
 		}
-
-		log.Println("result", result)
 		user, err := dbmodel.InsertUser(result)
-		log.Println("user", user)
-		log.Println("err", err)
 
 		defer resp.Body.Close()
 
@@ -164,20 +177,20 @@ func main() {
 
 		c.Redirect(http.StatusFound, "/")
 	})
-	apiV1.Use(getUserFromContextMiddleware())
+	if env != "dev" {
+		apiV1.Use(getUserFromContextMiddleware())
+	}
 
 	apiV1.GET("/assets", func(c *gin.Context) {
-		user, userInfoErr := c.MustGet("userInfo").(*UserClaim)
-		if !userInfoErr {
+		user, err := getRequestUserInfo(c)
+		if !err {
 			c.AbortWithError(http.StatusInternalServerError, gin.Error{})
 		}
 
 		assets := dbmodel.ListMyAsset(user.Id)
 		log.Println("assets", assets)
 
-		c.JSON(200, gin.H{
-			"assets": assets,
-		})
+		c.JSON(200, assets)
 
 	})
 	apiV1.POST("/asset", func(c *gin.Context) {
