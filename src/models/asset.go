@@ -100,3 +100,20 @@ func DeleteAsset(uid string, aid string) bool {
 	}
 	return true
 }
+
+func UpdateCurrentValue(asset Asset) bool {
+
+	db := GetDb()
+	log.Println("asset.Aid:", asset.Aid)
+	log.Println("asset.Value:", asset.Value)
+	_, err = db.Exec(`
+		INSERT INTO asset_value 
+		(Aid, Value) VALUES(?, ?) 
+		ON DUPLICATE KEY UPDATE  Aid=?
+	`, asset.Aid, asset.Value, asset.Aid)
+	if err != nil {
+		log.Fatalln(err)
+		return false
+	}
+	return true
+}

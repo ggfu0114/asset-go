@@ -3,6 +3,7 @@ package main
 import (
 	"asset-go/src/api"
 	dbmodel "asset-go/src/models"
+	assetserv "asset-go/src/services"
 	"context"
 	"encoding/json"
 	"errors"
@@ -194,16 +195,22 @@ func main() {
 
 	})
 	apiV1.POST("/asset", func(c *gin.Context) {
-		user, userInfoErr := c.MustGet("userInfo").(*UserClaim)
-		if !userInfoErr {
+		user, err := getRequestUserInfo(c)
+		if !err {
 			c.AbortWithError(http.StatusInternalServerError, gin.Error{})
 		}
 		reqAsset := new(dbmodel.Asset)
-		err := c.Bind(reqAsset)
-		if err != nil {
+		err1 := c.Bind(reqAsset)
+		if err1 != nil {
 			log.Fatalln("Failed to bind request payload.", err)
 		}
 		aid := dbmodel.AddAsset(user.Id, *reqAsset)
+		aa, err2 := strconv.Atoi(aid)
+		reqAsset.Aid = aa
+		if err2 != nil {
+			log.Fatalln("Failed to convert asset id.", err2)
+		}
+		assetserv.QueryAssetValue(*reqAsset)
 		c.JSON(200, gin.H{
 			"aid": aid,
 		})
