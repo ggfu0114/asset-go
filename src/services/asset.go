@@ -7,6 +7,9 @@ import (
 	"io"
 	"log"
 	"net/http"
+
+	"github.com/gin-contrib/sessions"
+	"github.com/gin-gonic/gin"
 )
 
 const AssetPyHost = "http://127.0.0.1:8080"
@@ -21,8 +24,10 @@ type CurrentValueRequest struct {
 	Amount float32 `json:"amount"`
 }
 
-func QueryAssetValue(asset dbmodel.Asset) {
+func QueryAssetValue(c *gin.Context, asset dbmodel.Asset, operation string) {
 
+	session := sessions.Default(c)
+	token := session.Get("token")
 	jsonData := CurrentValueRequest{
 		Type:   asset.AssetType,
 		Market: asset.Market,
@@ -34,11 +39,13 @@ func QueryAssetValue(asset dbmodel.Asset) {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	req, err := http.NewRequest(http.MethodGet, AssetPyHost+"/current_value", bytes.NewBuffer(jsonByte))
+	queryUrl := AssetPyHost + "/current_value?op=" + operation
+	req, err := http.NewRequest(http.MethodGet, queryUrl, bytes.NewBuffer(jsonByte))
 	if err != nil {
 		log.Fatalln(err)
 	}
 	req.Header.Set("Content-Type", "application/json; charset=UTF-8")
+	req.Header.Set("Token", token.(string))
 
 	client := &http.Client{}
 	resp, err := client.Do(req)

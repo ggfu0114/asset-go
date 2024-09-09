@@ -210,7 +210,7 @@ func main() {
 		if err2 != nil {
 			log.Fatalln("Failed to convert asset id.", err2)
 		}
-		assetserv.QueryAssetValue(*reqAsset)
+		assetserv.QueryAssetValue(c, *reqAsset, "insert")
 		c.JSON(200, gin.H{
 			"aid": aid,
 		})
@@ -228,6 +228,7 @@ func main() {
 			log.Fatalln("Failed to bind request payload.", err)
 		}
 		dbmodel.UpdateAsset(user.Id, aid, *reqAsset)
+		assetserv.QueryAssetValue(c, *reqAsset, "update")
 		c.JSON(200, gin.H{
 			"reqAsset": reqAsset,
 		})

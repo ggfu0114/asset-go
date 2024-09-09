@@ -10,7 +10,7 @@ $ docker run \
 ```
 ```sh
 $ cd src
-$ gin --appPort 4000 --all -i run main.ts
+$ export APP_ENV=dev; gin --appPort 4000 --all -i run main.ts
 ```
 
 > The backend platform service
